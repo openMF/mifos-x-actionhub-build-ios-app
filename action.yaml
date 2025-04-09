@@ -5,12 +5,16 @@ branding:
   icon: 'play'
   color: 'gray-dark'
 inputs:
-  match_git_authorization_token:
+  match_git_basic_authorization:
     description: 'GitHub Personal Access Token for Fastlane Match git repo'
     required: true
 
   match_password:
     description: 'Fastlane Match encryption passphrase'
+    required: true
+
+  keychain_password:
+    description: 'Password to unlock the keychain for signing'
     required: true
 
 runs:
@@ -32,8 +36,9 @@ runs:
     - name: Build iOS App
       shell: bash
       env:
-        MATCH_GIT_BASIC_AUTHORIZATION: ${{ inputs.match_git_authorization_token }}
+        MATCH_GIT_BASIC_AUTHORIZATION: ${{ inputs.match_git_basic_authorization }}
         MATCH_PASSWORD: ${{ inputs.match_password }}
+        KEYCHAIN_PASSWORD: ${{ inputs.keychain_password }}
       run: bundle exec fastlane ios build_ios
 
     - name: Upload iOS Artifact
