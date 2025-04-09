@@ -4,17 +4,18 @@ author: 'Mifos Initiative'
 branding:
   icon: 'play'
   color: 'gray-dark'
+
 inputs:
   match_git_basic_authorization:
-    description: 'GitHub Personal Access Token for Fastlane Match git repo'
+    description: 'Base64-encoded GitHub token used by Fastlane Match to authenticate and clone the certificates/profiles repository securely'
     required: true
 
   match_password:
-    description: 'Fastlane Match encryption passphrase'
+    description: 'Encryption passphrase used by Fastlane Match to decrypt the signing certificates and provisioning profiles stored in the remote repository'
     required: true
 
   keychain_password:
-    description: 'Password to unlock the keychain for signing'
+    description: 'Password used to create and unlock a temporary keychain during the CI build, allowing codesigning without user interaction'
     required: true
 
 runs:
