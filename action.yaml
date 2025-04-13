@@ -4,7 +4,6 @@ author: 'Mifos Initiative'
 branding:
   icon: 'play'
   color: 'gray-dark'
-
 inputs:
   match_git_basic_authorization:
     description: 'Base64-encoded GitHub token used by Fastlane Match to authenticate and clone the certificates/profiles repository securely'
@@ -14,8 +13,24 @@ inputs:
     description: 'Encryption passphrase used by Fastlane Match to decrypt the signing certificates and provisioning profiles stored in the remote repository'
     required: true
 
+  match_type:
+    description: 'Specifies the type of provisioning profile to use for code signing (e.g., adhoc, appstore, development)'
+    required: true
+
+  keychain_name:
+    description: 'Name of the keychain used to create and unlock a temporary keychain during the CI build, allowing codesigning without user interaction'
+    required: true
+
   keychain_password:
     description: 'Password used to create and unlock a temporary keychain during the CI build, allowing codesigning without user interaction'
+    required: true
+
+  export_method:
+    description: 'Defines how the app should be packaged for distribution (e.g., ad-hoc, app-store, development)'
+    required: true
+
+  app_identifier:
+    description: 'The bundle identifier used to uniquely identify your iOS application'
     required: true
 
 runs:
@@ -39,8 +54,20 @@ runs:
       env:
         MATCH_GIT_BASIC_AUTHORIZATION: ${{ inputs.match_git_basic_authorization }}
         MATCH_PASSWORD: ${{ inputs.match_password }}
+        KEYCHAIN_NAME: ${{ inputs.keychain_name }}
         KEYCHAIN_PASSWORD: ${{ inputs.keychain_password }}
-      run: bundle exec fastlane ios build_ios
+        MATCH_TYPE: ${{ inputs.match_type }}
+        EXPORT_METHOD: ${{ inputs.export_method }}
+        APP_IDENTIFIER: ${{ inputs.app_identifier }}
+      run: |
+        bundle exec fastlane ios build_ios \
+        match_git_basic_authorization:${{ env.MATCH_GIT_BASIC_AUTHORIZATION }} \
+        match_password:${{ env.MATCH_PASSWORD }} \
+        match_type:${{ env.MATCH_TYPE }} \
+        keychain_name:${{ env.KEYCHAIN_NAME }} \
+        keychain_password:${{ env.KEYCHAIN_PASSWORD }} \
+        export_method:${{ env.EXPORT_METHOD }} \
+        app_identifier:${{ env.APP_IDENTIFIER }}
 
     - name: Upload iOS Artifact
       uses: actions/upload-artifact@v4
