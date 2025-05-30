@@ -1,12 +1,12 @@
 # KMP Build iOS App
-This GitHub Action automates the process of building and archiving an iOS application using Fastlane. It supports secure code signing via Fastlane Match and handles the complete build workflow and artifact storage.
+This GitHub Action automates the process of building and archiving an iOS application using Fastlane. It supports both **Debug and Release (signed)** builds, secure code signing via Fastlane Match, and handles complete artifact storage.
 
 ## Features
-- Automated iOS app building and archiving
+- Automated Debug and Release (signed) iOS app building and archiving
 
 - Temporary keychain creation for secure, non-interactive builds
 
-- Secure code signing using Fastlane Match in readonly mode
+- Secure code signing using Fastlane Match for Release builds
 
 - Compressed IPA artifact upload
 
@@ -19,11 +19,18 @@ Before using this action, make sure you have:
 
 - Fastlane set up in the repository with a Fastfile under the fastlane/ directory
 
-- A build_ios lane defined in the Fastfile
+- A `build_ios` and `build_signed_ios` lanes defined in the Fastfile
 
-- Signing certificates and provisioning profiles stored and encrypted via Fastlane Match
+- For Release builds: signing certificates and provisioning profiles stored and encrypted via Fastlane Match
 
 - Your SSH private key (used to access the repo) is **base64-encoded** and saved as a GitHub secret
+
+## Supported Build Types
+| Build Type | Description                                                                  |
+| ---------- | ---------------------------------------------------------------------------- |
+| Debug      | Basic build for testing, no signing required                                 |
+| Release    | Signed build with certificates via Fastlane Match, suitable for distribution |
+
 
 ## Step-by-Step: SSH Setup for Fastlane Match
 1. Generate SSH Key Locally<br>
@@ -76,43 +83,83 @@ This command copies the base64-encoded private key to your clipboard (macOS).
    - Value: Paste the base64-encoded private key
 
 ## Inputs
-Name | Description
--- | --
-match_ssh_private_key | Base64-encoded SSH private key for Fastlane Match Git access (required)
-match_password | Password used by Match to decrypt provisioning assets (required)
-match_type | Type of provisioning profile (adhoc, appstore, development) (required)
-git_url |	URL to the certificates Git repo (required)
-git_branch |	Branch to fetch provisioning assets from (required)
-app_identifier | The iOS app bundle ID (e.g., com.example.app) (required)
-provisioning_profile_name |	Name of the provisioning profile to use (required)
+| Name            | Description                                      | Required    | Notes                |
+| --------------- | ------------------------------------------------ | ----------- | -------------------- |
+| build_type      | Build type: `Debug` or `Release`                 | No          | Default: `Debug`     |
+| appstore_key_id | App Store Connect API key ID                     | Release only | Required for Release |
+| appstore_issuer_id | App Store Connect issuer ID                      | Release only | Required for Release |
+| appstore_auth_key | Base64-encoded `.p8` API private key             | Release only | Required for Release |
+| match_ssh_private_key | Base64-encoded SSH private key for Match         | Release only | Required for Release |
+| match_password  | Password to decrypt Match assets                 | Release only | Required for Release |
+| match_type      | Profile type: `adhoc`, `appstore`, `development` | Release only | Required for Release |
+| git_url         | URL of the Match cert repo                       | Release only | Required for Release |
+| git_branch      | Branch in Match repo                             | Release only | Required for Release |
+| app_identifier  | App bundle ID (`com.example.app`)                | Release only | Required for Release |
+| provisioning_profile_name | Name of provisioning profile                     | Release only | Required for Release |
 
-## Usage
 
+## Usage Example: Combined Debug & Release Workflow
 ```yaml
 name: KMP iOS Build and Archive
 
-on:
   workflow_dispatch:
+    inputs:
+      build_type:
+        type: choice
+        options:
+          - Release
+          - Debug
+        default: Debug
+        description: Release Type
 
 jobs:
-  build_ios_app:
+  build_debug_ios_app:
     name: Build iOS App
+    if: ${{ inputs.build_type == 'Debug' }}
     runs-on: macos-latest
 
     steps:
+      - name: Set Xcode version
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode_version: latest-stable
+
       - name: Checkout Repository
         uses: actions/checkout@v4
 
       - name: Build iOS App
-        uses: openMF/mifos-x-actionhub-build-ios-app@v1.0.1
+        uses: HekmatullahAmin/mifos-x-actionhub-build-ios-app@enhance-ios-build-action
         with:
-           match_ssh_private_key: ${{ secrets.MATCH_SSH_PRIVATE_KEY }}
-           match_password: ${{ secrets.MATCH_PASSWORD }}
-           git_url: 'git@github.com:your-org/your-certificates-repo.git'
-           git_branch: 'master'
-           match_type: 'adhoc'
-           app_identifier: 'com.example.myapp'
-           provisioning_profile_name: 'match AdHoc com.example.myapp'
+          build_type: ${{ inputs.build_type }}
+
+  build_signed_ios_app:
+    name: Build signed iOS app
+    if: ${{ inputs.build_type == 'Release' }}
+    runs-on: macos-latest
+
+    steps:
+      - name: Set Xcode version
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode_version: latest-stable
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Build signed iOS App
+        uses: HekmatullahAmin/mifos-x-actionhub-build-ios-app@enhance-ios-build-action
+        with:
+          build_type: ${{ inputs.build_type }}
+          git_url: 'git@github.com:your-org/your-certificates-repo.git'
+          git_branch: 'master'
+          match_type: 'adhoc'
+          app_identifier: 'com.example.myapp'
+          provisioning_profile_name: 'match AdHoc com.example.myapp'
+          appstore_key_id: ${{ secrets.APPSTORE_KEY_ID }}
+          appstore_issuer_id: ${{ secrets.APPSTORE_ISSUER_ID }}
+          appstore_auth_key: ${{ secrets.APPSTORE_AUTH_KEY }}
+          match_password: ${{ secrets.MATCH_PASSWORD }}
+          match_ssh_private_key: ${{ secrets.MATCH_SSH_PRIVATE_KEY }}
 ```
 
 ## Workflow Details
