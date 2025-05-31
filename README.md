@@ -79,8 +79,8 @@ This command copies the base64-encoded private key to your clipboard (macOS).
 - Go to the repo with your Fastfile (the project repo, not the certs repo).
 - Navigate to Settings → Secrets and variables → Actions → New repository secret.
 - Add the following:
-   - Name: MATCH_SSH_PRIVATE_KEY
-   - Value: Paste the base64-encoded private key
+    - Name: MATCH_SSH_PRIVATE_KEY
+    - Value: Paste the base64-encoded private key
 
 ## Inputs
 | Name            | Description                                      | Required    | Notes                |
@@ -128,7 +128,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build iOS App
-        uses: HekmatullahAmin/mifos-x-actionhub-build-ios-app@enhance-ios-build-action
+        uses: openMF/mifos-x-actionhub-build-ios-app@v1.0.2
         with:
           build_type: ${{ inputs.build_type }}
 
@@ -147,7 +147,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build signed iOS App
-        uses: HekmatullahAmin/mifos-x-actionhub-build-ios-app@enhance-ios-build-action
+        uses: openMF/mifos-x-actionhub-build-ios-app@v1.0.2
         with:
           build_type: ${{ inputs.build_type }}
           git_url: 'git@github.com:your-org/your-certificates-repo.git'
@@ -162,23 +162,90 @@ jobs:
           match_ssh_private_key: ${{ secrets.MATCH_SSH_PRIVATE_KEY }}
 ```
 
+## Fastlane Configuration
+This Action requires the following Fastlane lanes to be defined in your Fastfile:
+
+### Debug Build Lane
+```yaml
+desc "Build iOS application (Debug)"
+lane :build_ios do |options|
+    build_ios_app(
+        scheme: "iosApp",
+        project: "cmp-ios/iosApp.xcodeproj",
+        output_name: "iosApp",
+        output_directory: "cmp-ios/build",
+        skip_codesigning: true,
+        skip_archive: true
+    )
+end
+```
+### Release (Signed) Build Lane
+```yaml
+desc "Build Signed iOS application (Release)"
+lane :build_signed_ios do |options|
+    
+    # CI Setup
+    unless ENV['CI']
+        UI.message("🖥️ Running locally, skipping CI-specific setup.")
+    else
+        setup_ci(provider: "circleci")
+    end
+
+    # Load API Key for App Store Connect
+    app_store_connect_api_key(
+        key_id: options[:appstore_key_id] || "DEFAULT_KEY_ID",
+        issuer_id: options[:appstore_issuer_id] || "DEFAULT_ISSUER_ID",
+        key_filepath: options[:key_filepath] || "secrets/Auth_key.p8",
+        duration: 1200
+    )
+
+    # Fetch certificates and profiles with Match
+    match(
+        type: options[:match_type] || "adhoc",
+        app_identifier: options[:app_identifier] || "org.mifos.kmp.template",
+        readonly: false,
+        git_url: options[:git_url] || "git@github.com:openMF/ios-provisioning-profile.git",
+        git_branch: options[:git_branch] || "master",
+        git_private_key: options[:git_private_key] || "~/.ssh/match_ci_key",
+        force_for_new_devices: true,
+        api_key: Actions.lane_context[SharedValues::APP_STORE_CONNECT_API_KEY]
+    )
+
+  app_identifier = options[:app_identifier] || "org.mifos.kmp.template"
+  provisioning_profile_name = options[:provisioning_profile_name] || "match AdHoc org.mifos.kmp.template"
+  # Build signed IPA
+    build_ios_app(
+        scheme: "iosApp",
+        project: "cmp-ios/iosApp.xcodeproj",
+        output_name: "iosApp",
+        output_directory: "cmp-ios/build",
+        export_options: {
+          provisioningProfiles: {
+            options[:app_identifier] => options[:provisioning_profile_name]
+          }
+        },
+        xcargs: "CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=\"Apple Distribution\" DEVELOPMENT_TEAM=L432S2FZP5 PROVISIONING_PROFILE_SPECIFIER=\"#{options[:provisioning_profile_name]}\""
+    )
+end
+```
+
 ## Workflow Details
 
 1. **Environment Setup**
-   - Configures Ruby environment
-   - Sets up Fastlane with required plugins
-   - Configures bundler for dependency management
+    - Configures Ruby environment
+    - Sets up Fastlane with required plugins
+    - Configures bundler for dependency management
 
 2. **Build Process**
-   - Executes Fastlane commands to build the iOS application
-   - Generates IPA file
-   - Handles build configuration through Fastlane
+    - Executes Fastlane commands to build the iOS application
+    - Generates IPA file
+    - Handles build configuration through Fastlane
 
 3. **Artifact Management**
-   - Uploads built IPA file as an artifact
-   - Applies high compression (level 9)
-   - Sets 1-day retention period
-   - Captures all IPA files in the build directory
+    - Uploads built IPA file as an artifact
+    - Applies high compression (level 9)
+    - Sets 1-day retention period
+    - Captures all IPA files in the build directory
 
 ## Requirements
 
@@ -191,5 +258,5 @@ jobs:
 - Ruby (installed via setup-ruby action)
 - Bundler 2.2.27
 - Fastlane with following plugins:
-   - firebase_app_distribution
-   - increment_build_number
+    - firebase_app_distribution
+    - increment_build_number
