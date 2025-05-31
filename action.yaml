@@ -6,33 +6,50 @@ branding:
   color: 'gray-dark'
 inputs:
 
+  build_type:
+    description: 'Type of build to perform (e.g., Debug, Release)'
+    required: false
+    default: 'Debug'
+
+  appstore_key_id:
+    required: false
+    description: 'Key ID from App Store Connect API Key'
+
+  appstore_issuer_id:
+    required: false
+    description: 'Issuer ID from App Store Connect API Key'
+
+  appstore_auth_key:
+    required: false
+    description: 'Base64-encoded contents of the .p8 private key file'
+
   match_ssh_private_key:
     description: 'SSH private key used to access the signing repository'
-    required: true
+    required: false
 
   match_password:
     description: 'Encryption passphrase used by Fastlane Match to decrypt the signing certificates and provisioning profiles stored in the remote repository'
-    required: true
+    required: false
 
   git_url:
     description: 'URL of the remote repository containing the signing certificates and provisioning profiles'
-    required: true
+    required: false
 
   git_branch:
     description: 'Branch of the remote repository containing the signing certificates and provisioning profiles'
-    required: true
+    required: false
 
   match_type:
     description: 'Specifies the type of provisioning profile to use for code signing (e.g., adhoc, appstore, development)'
-    required: true
+    required: false
 
   app_identifier:
     description: 'The bundle identifier used to uniquely identify your iOS application'
-    required: true
+    required: false
 
   provisioning_profile_name:
     description: 'The name of the Provisioning profile to use for code signing'
-    required: true
+    required: false
 
 runs:
   using: composite
@@ -48,7 +65,17 @@ runs:
         gem install bundler:2.2.27
         bundle install --jobs 4 --retry 3
 
+    - name: Set up App Store Auth Key
+      if: ${{ inputs.build_type == 'Release' }}
+      env:
+        AUTH_KEY: ${{ inputs.appstore_auth_key }}
+      shell: bash
+      run: |
+        mkdir -p secrets
+        echo "$AUTH_KEY" | base64 --decode > secrets/Auth_key.p8
+
     - name: Set up SSH for Match
+      if: ${{ inputs.build_type == 'Release' }}
       shell: bash
       env:
         MATCH_SSH_PRIVATE_KEY: ${{ inputs.match_ssh_private_key }}
@@ -59,9 +86,12 @@ runs:
         ssh-keyscan github.com >> ~/.ssh/known_hosts
         echo -e "Host github.com\n  IdentityFile ~/.ssh/match_ci_key\n  StrictHostKeyChecking no" >> ~/.ssh/config
 
-    - name: Build iOS App
+    - name: Build singed iOS App
+      if: ${{ inputs.build_type == 'Release' }}
       shell: bash
       env:
+        APPSTORE_KEY_ID: ${{ inputs.appstore_key_id }}
+        APPSTORE_ISSUER_ID: ${{ inputs.appstore_issuer_id }}
         MATCH_PASSWORD: ${{ inputs.match_password }}
         GIT_URL: ${{ inputs.git_url }}
         GIT_BRANCH: ${{ inputs.git_branch }}
@@ -69,7 +99,10 @@ runs:
         APP_IDENTIFIER: ${{ inputs.app_identifier }}
         PROVISIONING_PROFILE_NAME: ${{ inputs.provisioning_profile_name }}
       run: |
-        bundle exec fastlane ios build_ios \
+        bundle exec fastlane ios build_signed_ios \
+        appstore_key_id:"$APPSTORE_KEY_ID" \
+        appstore_issuer_id:"$APPSTORE_ISSUER_ID" \
+        key_filepath:secrets/Auth_key.p8 \
         git_private_key:~/.ssh/match_ci_key \
         match_password:"$MATCH_PASSWORD" \
         git_url:"$GIT_URL" \
@@ -77,6 +110,11 @@ runs:
         match_type:"$MATCH_TYPE" \
         app_identifier:"$APP_IDENTIFIER" \
         provisioning_profile_name:"$PROVISIONING_PROFILE_NAME"
+
+    - name: Build Debug iOS App
+      if: ${{ inputs.build_type == 'Debug' }}
+      shell: bash
+      run: bundle exec fastlane ios build_ios
 
     - name: Upload iOS Artifact
       uses: actions/upload-artifact@v4
