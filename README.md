@@ -128,7 +128,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build iOS App
-        uses: openMF/mifos-x-actionhub-build-ios-app@v1.0.3
+        uses: openMF/mifos-x-actionhub-build-ios-app@v1.0.2
         with:
           build_type: ${{ inputs.build_type }}
 
@@ -147,7 +147,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build signed iOS App
-        uses: openMF/mifos-x-actionhub-build-ios-app@v1.0.3
+        uses: openMF/mifos-x-actionhub-build-ios-app@v1.0.2
         with:
           build_type: ${{ inputs.build_type }}
           git_url: 'git@github.com:your-org/your-certificates-repo.git'
