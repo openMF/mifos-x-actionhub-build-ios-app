@@ -44,11 +44,11 @@ inputs:
     required: false
 
   app_identifier:
-    description: 'The bundle identifier used to uniquely identify your iOS application'
+    description: 'The bundle identifier used to uniquely identify your iOS application (optional - reads from project_config.rb if not provided)'
     required: false
 
   provisioning_profile_name:
-    description: 'The name of the Provisioning profile to use for code signing'
+    description: 'The name of the Provisioning profile to use for code signing (optional - reads from project_config.rb if not provided)'
     required: false
 
 runs:
@@ -72,7 +72,7 @@ runs:
       shell: bash
       run: |
         mkdir -p secrets
-        echo "$AUTH_KEY" | base64 --decode > secrets/Auth_key.p8
+        echo "$AUTH_KEY" | base64 -d > secrets/Auth_key.p8
 
     - name: Set up SSH for Match
       if: ${{ inputs.build_type == 'Release' }}
@@ -81,7 +81,7 @@ runs:
         MATCH_SSH_PRIVATE_KEY: ${{ inputs.match_ssh_private_key }}
       run: |
         mkdir -p ~/.ssh
-        echo "$MATCH_SSH_PRIVATE_KEY" | base64 --decode > ~/.ssh/match_ci_key
+        echo "$MATCH_SSH_PRIVATE_KEY" | base64 -d > ~/.ssh/match_ci_key
         chmod 600 ~/.ssh/match_ci_key
         ssh-keyscan github.com >> ~/.ssh/known_hosts
         echo -e "Host github.com\n  IdentityFile ~/.ssh/match_ci_key\n  StrictHostKeyChecking no" >> ~/.ssh/config
