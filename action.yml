@@ -1,0 +1,88 @@
+# Composite action: Build iOS IPA (debug unsigned or release signed)
+# Patched for fastlane-modernization sub-plan 12:
+#   - Builds on PR #47 (Xcode 26 fix, currently shipped as v1.0.13)
+#   - AC19: SHA-pin ruby/setup-ruby
+#   - AC20: rename MATCH_SSH_PRIVATE_KEY → MATCH_GIT_PRIVATE_KEY
+name: 'Build iOS App'
+description: 'Build iOS IPA (debug unsigned or release signed via Match).'
+
+inputs:
+  ios_package_name:
+    description: 'iOS module name'
+    required: true
+  build_type:
+    description: "'Debug' or 'Release'"
+    required: true
+  use_cocoapods:
+    description: 'Install CocoaPods'
+    required: false
+    default: 'false'
+  shared_module:
+    description: 'KMP shared module path'
+    required: true
+  appstore_key_id:
+    description: 'App Store Connect API key ID (release only)'
+    required: false
+  appstore_issuer_id:
+    description: 'App Store Connect issuer ID (release only)'
+    required: false
+  appstore_auth_key:
+    description: 'Base64 .p8 key (release only)'
+    required: false
+  match_password:
+    description: 'Fastlane Match passphrase (release only)'
+    required: false
+  match_git_private_key:
+    description: 'SSH key for Match repo (canonical — AC20)'
+    required: false
+  match_ssh_private_key:
+    description: 'DEPRECATED — use match_git_private_key. Removed in v2.0.'
+    required: false
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Ruby (SHA-pinned — AC19)
+      uses: ruby/setup-ruby@afeafc3d1ab54a631816aba4c914a0081c12ff2f  # v1.232.0
+      with:
+        bundler-cache: true
+
+    - name: Inflate secrets (release only)
+      if: ${{ inputs.build_type == 'Release' }}
+      shell: bash
+      env:
+        APPSTORE_AUTH_KEY_B64: ${{ inputs.appstore_auth_key }}
+        MATCH_GIT_PRIVATE_KEY: ${{ inputs.match_git_private_key || inputs.match_ssh_private_key }}
+      run: |
+        mkdir -p secrets ~/.ssh
+        echo "$APPSTORE_AUTH_KEY_B64" | base64 --decode > secrets/AuthKey.p8
+        printf '%s' "$MATCH_GIT_PRIVATE_KEY" > secrets/match_ci_key
+        chmod 600 secrets/match_ci_key
+        cat > ~/.ssh/config <<'EOF'
+        Host github.com
+          IdentityFile $(pwd)/secrets/match_ci_key
+          StrictHostKeyChecking no
+        EOF
+
+    - name: Build
+      shell: bash
+      env:
+        MATCH_PASSWORD: ${{ inputs.match_password }}
+        MATCH_GIT_PRIVATE_KEY: ${{ inputs.match_git_private_key || inputs.match_ssh_private_key }}
+      run: |
+        if [ "${{ inputs.build_type }}" = "Release" ]; then
+          bundle exec fastlane ios build_signed_ios
+        else
+          bundle exec fastlane ios build_ios
+        fi
+
+    - name: Cleanup
+      shell: bash
+      if: always()
+      run: rm -f secrets/AuthKey.p8 secrets/match_ci_key
+
+    - name: Upload IPA
+      uses: actions/upload-artifact@v4
+      with:
+        name: ios-app
+        path: '**/build/**/*.ipa'
